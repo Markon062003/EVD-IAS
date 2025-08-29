@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Pong Game</title>
+  <style>
+  body {
+  background: #222;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  margin: 0;
+}
+
+canvas {
+  background: #111;
+  display: block;
+  box-shadow: 0 0 16px #000;
+  border-radius: 12px;
+}
+
+#score {
+  position: absolute;
+  top: 32px;
+  left: 0; right: 0;
+  text-align: center;
+  color: #fff;
+  font-size: 2.5em;
+  font-family: monospace;
+  letter-spacing: 0.1em;
+  user-select: none;
+  z-index: 1;
+}
+</style>
+</head>
+<body>
+  <div id="score">0 : 0</div>
+  <canvas id="pong" width="800" height="500"></canvas>
+<script>
+    const canvas = document.getElementById('pong');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('score');
+
+// Game objects
+const paddleWidth = 12, paddleHeight = 100;
+const ballRadius = 12;
+let leftScore = 0, rightScore = 0;
+
+const leftPaddle = {
+  x: 20,
+  y: canvas.height / 2 - paddleHeight / 2,
+  w: paddleWidth,
+  h: paddleHeight,
+  dy: 0,
+  speed: 7
+};
+
+const rightPaddle = {
+  x: canvas.width - 20 - paddleWidth,
+  y: canvas.height / 2 - paddleHeight / 2,
+  w: paddleWidth,
+  h: paddleHeight,
+  dy: 0,
+  speed: 5  // AI paddle speed (tweak for difficulty)
+};
+
+const ball = {
+  x: canvas.width / 2,
+  y: canvas.height / 2,
+  dx: 6 * (Math.random() > 0.5 ? 1 : -1),
+  dy: 5 * (Math.random() > 0.5 ? 1 : -1),
+  r: ballRadius
+};
+
+function drawRect(x, y, w, h, color='#fff') {
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, w, h);
+}
+
+function drawCircle(x, y, r, color='#fff') {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawNet() {
+  ctx.save();
+  ctx.strokeStyle = '#555';
+  ctx.beginPath();
+  for(let y=0; y<canvas.height; y+=24){
+    ctx.moveTo(canvas.width/2, y);
+    ctx.lineTo(canvas.width/2, y+12);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+function resetBall(direction = 1) {
+  ball.x = canvas.width / 2;
+  ball.y = canvas.height / 2;
+  ball.dx = 6 * direction;
+  ball.dy = (Math.random() * 7 - 3.5);
+}
+
+function updateScore() {
+  scoreEl.textContent = `${leftScore} : ${rightScore}`;
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawNet();
+  drawRect(leftPaddle.x, leftPaddle.y, leftPaddle.w, leftPaddle.h);
+  drawRect(rightPaddle.x, rightPaddle.y, rightPaddle.w, rightPaddle.h);
+  drawCircle(ball.x, ball.y, ball.r);
+}
+
+function clamp(val, min, max) {
+  return Math.max(min, Math.min(val, max));
+}
+
+function update() {
+  // Move left paddle (by keyboard or mouse)
+  leftPaddle.y = clamp(leftPaddle.y + leftPaddle.dy, 0, canvas.height - leftPaddle.h);
+
+  // AI movement for right paddle
+  // Simple AI: move towards the ball's y position
+  if (ball.y < rightPaddle.y + rightPaddle.h / 2) {
+    rightPaddle.y -= rightPaddle.speed;
+  } else if (ball.y > rightPaddle.y + rightPaddle.h / 2) {
+    rightPaddle.y += rightPaddle.speed;
+  }
+  rightPaddle.y = clamp(rightPaddle.y, 0, canvas.height - rightPaddle.h);
+
+  // Move ball
+  ball.x += ball.dx;
+  ball.y += ball.dy;
+
+  // Top/bottom collision
+  if(ball.y - ball.r < 0) {
+    ball.y = ball.r;
+    ball.dy *= -1;
+  }
+  if(ball.y + ball.r > canvas.height) {
+    ball.y = canvas.height - ball.r;
+    ball.dy *= -1;
+  }
+
+  // Paddle collision (left)
+  if(ball.x - ball.r < leftPaddle.x + leftPaddle.w &&
+     ball.y > leftPaddle.y && ball.y < leftPaddle.y + leftPaddle.h) {
+    ball.x = leftPaddle.x + leftPaddle.w + ball.r;
+    ball.dx *= -1.05; // bounce and speed up
+    // Add some spin
+    let collidePoint = (ball.y - (leftPaddle.y + leftPaddle.h / 2)) / (leftPaddle.h / 2);
+    ball.dy = collidePoint * 7;
+  }
+
+  // Paddle collision (right)
+  if(ball.x + ball.r > rightPaddle.x &&
+     ball.y > rightPaddle.y && ball.y < rightPaddle.y + rightPaddle.h) {
+    ball.x = rightPaddle.x - ball.r;
+    ball.dx *= -1.05;
+    let collidePoint = (ball.y - (rightPaddle.y + rightPaddle.h / 2)) / (rightPaddle.h / 2);
+    ball.dy = collidePoint * 7;
+  }
+
+  // Score left/right
+  if(ball.x < 0) {
+    rightScore += 1;
+    updateScore();
+    resetBall(-1);
+  }
+  if(ball.x > canvas.width) {
+    leftScore += 1;
+    updateScore();
+    resetBall(1);
+  }
+}
+
+// Keyboard controls for left paddle only
+document.addEventListener('keydown', e => {
+  if(e.key === 'w') leftPaddle.dy = -leftPaddle.speed;
+  if(e.key === 's') leftPaddle.dy = leftPaddle.speed;
+});
+document.addEventListener('keyup', e => {
+  if(e.key === 'w' || e.key === 's') leftPaddle.dy = 0;
+});
+
+// Mouse control for left paddle
+canvas.addEventListener('mousemove', function(e) {
+  const rect = canvas.getBoundingClientRect();
+  const mouseY = e.clientY - rect.top;
+  leftPaddle.y = clamp(mouseY - leftPaddle.h / 2, 0, canvas.height - leftPaddle.h);
+});
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+updateScore();
+loop();
+  </script>
+</body>
+</html>
